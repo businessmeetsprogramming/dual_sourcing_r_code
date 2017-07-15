@@ -1,0 +1,86 @@
+---
+title: "Global Dual Sourcing (Dual-mode Transportation)"
+author: "Robert Boute, Jan Van Mieghem and Dennis Zhang"
+date: "May 22, 2017"
+output: html_document
+runtime: shiny
+---
+```{r, echo=FALSE}
+  global_cost_min = 5
+  global_cost_max = 15
+  local_cost_min = global_cost_max
+  local_cost_max = local_cost_min * 2
+  holding_cost_min = global_cost_min * 0.1
+  holding_cost_max = global_cost_max * 0.1
+  backlog_cost_min = global_cost_min * 0.1
+  backlog_cost_max = global_cost_max * 0.1
+
+inputPanel(
+  sliderInput("c_local", label = "Sourcing cost of local source ($/unit)",
+              value = (local_cost_min + local_cost_max)/2, 
+              min = local_cost_min, max = local_cost_max),
+  sliderInput("c_global", label = "Sourcing cost of global source ($/unit)",
+              value = (global_cost_min + global_cost_min)/2, 
+              min = global_cost_min, max = global_cost_max),
+  sliderInput("l_local", label = "Leadtime for local source (#days)",
+              value = 3, min = 0, max = 7),
+  sliderInput("l_global", label = "Leadtime for global source (#days)",
+              value = 9, min = 7, max = 28),
+  sliderInput("h", label = "Holding cost ($/unit)", 
+              value = (holding_cost_min + holding_cost_max)/2, 
+              min = holding_cost_min, max = holding_cost_max),
+  sliderInput("b", label = "Backlogging cost ($/unit)",
+              value = (backlog_cost_min + backlog_cost_max)/2, 
+              min = backlog_cost_min, max = backlog_cost_max),
+  sliderInput("mu", label = "Average demand per day",
+              value = 1, min = 10, max = 100),
+  sliderInput("sigma", label = "Standard Deviation of demand",
+              value = 1, min = 1, max = 5)
+)
+
+renderPlot({
+  resolution = 1000
+  alpha = rep(1:(resolution-1)) / resolution
+  l = input$l_global - input$l_local
+  z_i = qnorm(input$b/(input$b + input$h))
+  plot(z_i, z_i)
+  kappa_i = input$h * (z_i + (input$h + input$b) / input$h * 
+                      (dnorm(z_i) - z_i * pnorm(z_i, lower.tail=FALSE)))
+  theta_c = (input$c_local - input$c_global - input$h * l) / kappa_i * (input$mu / input$sigma)
+  
+  sourcing_cost = input$c_global * alpha^l * input$mu + 
+    input$c_local * (1 - alpha^l) * input$mu
+  holding_cost = input$h * input$l_local * input$mu + 
+    input$h * l * alpha^l * input$mu
+  inventory_cost = kappa_i * input$sigma * sqrt(input$l_local + 1 / (1-alpha^2)) + holding_cost
+  total_cost = sourcing_cost + holding_cost + inventory_cost
+  optimal_percent = which.min(total_cost) / resolution
+  
+  
+  
+  par(mfrow=c(3,1))
+  plot(alpha, total_cost, col=1, lwd=3, cex.lab=1.5, cex.axis=2, pch=1, type="l",
+       xlab = "Percentage from Global Source (%)", ylab = "Total Cost ($)")
+  legend("bottomleft", c("Total Cost (Sourcing + Inventory)"), lwd=3, cex=2)
+  abline(v = optimal_percent, col=2, lwd=5)
+  grid(lwd=2)
+  if (optimal_percent > 0.5) {
+    text(optimal_percent-0.1, 
+         (max(total_cost)-min(total_cost))*0.9+min(total_cost), optimal_percent, 
+         cex=2, col=2)
+  } else {
+    text(optimal_percent+0.1, max(c(max(total_cost))) * 0.9, optimal_percent, 
+         cex=2, col=2)    
+  }
+  plot(alpha, sourcing_cost, col=3, lwd=3, cex.lab=1.5, cex.axis=2, type="l",
+       xlab = "Percentage from Global Source (%)", ylab = "Sourcing Cost ($)")  
+  legend("bottomleft", c("Sourcing Cost ($)"), col=3, lwd=3, cex=2)
+  abline(v = optimal_percent, col=2, lwd=5)
+  grid(lwd=2)
+  plot(alpha, inventory_cost, col=4, lwd=3, cex.lab=1.5, cex.axis=2, type="l",
+       xlab = "Percentage from Global Source (%)", ylab = "Inventory Cost ($)") 
+  legend("bottomleft", c("Inventory Cost ($)"), col=4, lwd=3, cex=2)
+  abline(v = optimal_percent, col=2, lwd=5)
+  grid(lwd=2)
+},  height = 800, width = 800)
+```
